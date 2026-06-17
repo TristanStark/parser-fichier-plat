@@ -1,68 +1,101 @@
 from typing import Any, Dict, List, Optional, Tuple
-from .conditions import RegisteredField, normalize_conditions, SourceResult, SourceFunction
+
+from .common import SourceFunction
+from .fields import RegisteredField
 
 
 class FixedWidthLineSolver:
     """
-    Solveur de ligne plate.
+    Builds a complete logical fixed-width line.
 
-    Il avance caractère par caractère.
-    À chaque position :
-        - il cherche les champs enregistrés à cette position
-        - il filtre selon les conditions
-        - il choisit le champ applicable
-        - il appelle sa fonction source
-        - il écrit la donnée
-        - il avance à la position suivante après le champ
+    In the BRN-like use case:
+        logical_length = 600
+
+    You register fields against positions 1..600 and a line_type.
+    The master generator will later split this 600-character logical line into
+    physical lines.
     """
 
     def __init__(
         self,
-        line_length: int,
+        logical_length: int,
         source_registry: Dict[str, SourceFunction],
         filler: str = " ",
         strict_multiple_match: bool = True,
     ):
-        self.line_length = line_length
+        if logical_length < 1:
+            raise ValueError("logical_length must be greater than zero")
+
+        if len(filler) != 1:
+            raise ValueError("filler must be exactly one character")
+
+        self.logical_length = logical_length
         self.source_registry = source_registry
         self.filler = filler
         self.strict_multiple_match = strict_multiple_match
-        self.fields_by_start = {}
+        self.fields_by_start: Dict[int, List[RegisteredField]] = {}
 
     def register(
         self,
-        name: str,
+        line_type: str,
         start: int,
         length: int,
         function_name: str,
         conditions: Optional[List[Any]] = None,
+        name: Optional[str] = None,
         align: str = "left",
         pad_char: str = " ",
         truncate: bool = False,
         required: bool = False,
         priority: int = 0,
     ):
+        """
+        Register one fixed-width field for a given logical line type.
+
+        Args:
+            line_type: Type of logical line, for example "COMPTE" or "TITULAIRE".
+            start: 1-based position in the logical line.
+            length: Field length.
+            function_name: Name of the source function in source_registry.
+            conditions: Optional conditions, such as ["tope_code = MI"].
+            name: Technical field name used in context and error messages.
+            align: "left" or "right".
+            pad_char: Padding character.
+            truncate: Whether too-long values should be cut instead of raising.
+            required: Whether an empty value is an error.
+            priority: Used when multiple fields match at the same position.
+        """
+
+        if name is None:
+            name = function_name
+
+        if not line_type:
+            raise ValueError(f"line_type is required for {name}")
+
         if start < 1:
-            raise ValueError(f"Position invalide pour {name}: {start}")
+            raise ValueError(f"Invalid start for {line_type}.{name}: {start}")
 
         if length < 1:
-            raise ValueError(f"Longueur invalide pour {name}: {length}")
+            raise ValueError(f"Invalid length for {line_type}.{name}: {length}")
 
-        if start + length - 1 > self.line_length:
+        end = start + length - 1
+
+        if end > self.logical_length:
             raise ValueError(
-                f"Le champ {name} dépasse la longueur de ligne : "
-                f"{start + length - 1} > {self.line_length}"
+                f"Field {line_type}.{name} exceeds logical length: "
+                f"{end} > {self.logical_length}"
             )
 
         if function_name not in self.source_registry:
-            raise ValueError(f"Fonction source inconnue : {function_name}")
+            raise ValueError(f"Unknown source function: {function_name}")
 
         field = RegisteredField(
+            line_type=line_type,
             name=name,
             start=start,
             length=length,
             function_name=function_name,
-            conditions=normalize_conditions(conditions),
+            conditions=conditions,
             align=align,
             pad_char=pad_char,
             truncate=truncate,
@@ -72,22 +105,32 @@ class FixedWidthLineSolver:
 
         self.fields_by_start.setdefault(start, []).append(field)
 
-    def build_line(
+    def build_logical_line(
         self,
         input_record: Dict[str, Any],
+        line_type: str,
         initial_context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, Dict[str, Any]]:
+        """
+        Build one logical line of the requested type.
+
+        Returns:
+            tuple(logical_line, updated_context)
+        """
+
         if initial_context is None:
             context = dict(input_record)
         else:
             context = dict(initial_context)
 
-        buffer = [self.filler] * self.line_length
-        written_by = {}
+        context["_line_type"] = line_type
+
+        buffer = [self.filler] * self.logical_length
+        written_by: Dict[int, str] = {}
 
         position = 1
 
-        while position <= self.line_length:
+        while position <= self.logical_length:
             candidates = self.fields_by_start.get(position, [])
 
             if not candidates:
@@ -97,22 +140,17 @@ class FixedWidthLineSolver:
             matching_fields = []
 
             for field in candidates:
-                if field.matches(input_record, context):
+                if field.matches(line_type, input_record, context):
                     matching_fields.append(field)
 
             if not matching_fields:
-                # Aucun champ applicable à cette position.
-                # On laisse blanc et on avance d'un caractère.
                 position += 1
                 continue
 
             selected_field = self._select_field(position, matching_fields)
 
-            raw_value, context = self._call_source_function(
-                selected_field,
-                input_record,
-                context,
-            )
+            source_func = self.source_registry[selected_field.function_name]
+            raw_value, context = source_func(input_record, context)
 
             formatted_value = self._format_value(raw_value, selected_field)
 
@@ -150,22 +188,16 @@ class FixedWidthLineSolver:
             return best
 
         if self.strict_multiple_match:
-            names = [field.name for field in matching_fields]
+            names = [
+                f"{field.line_type}.{field.name}"
+                for field in matching_fields
+            ]
             raise ValueError(
-                f"Plusieurs champs matchent à la position {position}: {names}. "
-                "Ajoute des conditions plus précises ou une priorité différente."
+                f"Several fields match at position {position}: {names}. "
+                "Add more precise conditions or different priorities."
             )
 
         return best
-
-    def _call_source_function(
-        self,
-        field: RegisteredField,
-        input_record: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> SourceResult:
-        source_func = self.source_registry[field.function_name]
-        return source_func(input_record, context)
 
     def _format_value(self, value: Any, field: RegisteredField) -> str:
         if value is None:
@@ -174,19 +206,24 @@ class FixedWidthLineSolver:
         value = str(value)
 
         if field.required and value == "":
-            raise ValueError(f"Champ obligatoire vide : {field.name}")
+            raise ValueError(f"Required field is empty: {field.line_type}.{field.name}")
 
         if len(value) > field.length:
             if field.truncate:
                 value = value[:field.length]
             else:
                 raise ValueError(
-                    f"Valeur trop longue pour {field.name}: "
-                    f"{value!r} fait {len(value)} caractères, "
-                    f"longueur attendue = {field.length}"
+                    f"Value too long for {field.line_type}.{field.name}: "
+                    f"{value!r} is {len(value)} chars, expected {field.length}"
                 )
 
         missing = field.length - len(value)
+
+        if len(field.pad_char) != 1:
+            raise ValueError(
+                f"pad_char must be exactly one character for "
+                f"{field.line_type}.{field.name}"
+            )
 
         if field.align == "left":
             return value + (field.pad_char * missing)
@@ -194,7 +231,9 @@ class FixedWidthLineSolver:
         if field.align == "right":
             return (field.pad_char * missing) + value
 
-        raise ValueError(f"Alignement invalide : {field.align}")
+        raise ValueError(
+            f"Invalid alignment for {field.line_type}.{field.name}: {field.align}"
+        )
 
     def _write_value(
         self,
@@ -208,9 +247,10 @@ class FixedWidthLineSolver:
 
             if position in written_by:
                 raise ValueError(
-                    f"Collision runtime à la position {position}: "
-                    f"{field.name} tente d'écrire sur {written_by[position]}"
+                    f"Runtime collision at position {position}: "
+                    f"{field.line_type}.{field.name} tries to write over "
+                    f"{written_by[position]}"
                 )
 
             buffer[position - 1] = char
-            written_by[position] = field.name
+            written_by[position] = f"{field.line_type}.{field.name}"
