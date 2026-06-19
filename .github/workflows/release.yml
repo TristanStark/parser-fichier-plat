@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build source archive
+        run: |
+          mkdir -p dist
+          git archive --format zip --output dist/parser-fichier-plat-${{ github.ref_name }}.zip HEAD
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/parser-fichier-plat-${{ github.ref_name }}.zip
+          generate_release_notes: true
