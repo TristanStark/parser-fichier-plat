@@ -8,31 +8,31 @@ from main_example import build_master
 def test_prefix_numbering_25_chars():
     builder = SegmentPrefixBuilder(
         prefix_length=25,
-        prefix_length_field="0000025",
+        prefix_length_field="0000000",
     )
 
     generation_date = date(2026, 8, 14)  # day-of-year 226
 
-    assert builder.build_prefix(1, 1, generation_date) == "NB222610000000252000011SE"
-    assert builder.build_prefix(2, 2, generation_date) == "NB222610000000252000022SE"
-    assert builder.build_prefix(3, 3, generation_date) == "NB222610000000252000033SE"
+    assert builder.build_prefix(1, 1, generation_date) == "NB222610000000002000011SE"
+    assert builder.build_prefix(2, 2, generation_date) == "NB222610000000002000022SE"
+    assert builder.build_prefix(3, 3, generation_date) == "NB222610000000002000033SE"
 
-    assert builder.build_prefix(4, 1, generation_date) == "NB222610000000252000041SE"
-    assert builder.build_prefix(5, 2, generation_date) == "NB222610000000252000052SE"
-    assert builder.build_prefix(6, 3, generation_date) == "NB222610000000252000063SE"
+    assert builder.build_prefix(4, 1, generation_date) == "NB222610000000002000041SE"
+    assert builder.build_prefix(5, 2, generation_date) == "NB222610000000002000052SE"
+    assert builder.build_prefix(6, 3, generation_date) == "NB222610000000002000063SE"
 
 
-def test_prefix_numbering_26_chars_if_00000025_is_required():
+def test_prefix_numbering_with_custom_reference_field():
     builder = SegmentPrefixBuilder(
         prefix_length=26,
-        prefix_length_field="00000025",
+        prefix_length_field="00000000",
     )
 
     generation_date = date(2026, 8, 14)
 
-    assert builder.build_prefix(4, 1, generation_date) == "NB2226100000000252000041SE"
-    assert builder.build_prefix(5, 2, generation_date) == "NB2226100000000252000052SE"
-    assert builder.build_prefix(6, 3, generation_date) == "NB2226100000000252000063SE"
+    assert builder.build_prefix(4, 1, generation_date) == "NB2226100000000002000041SE"
+    assert builder.build_prefix(5, 2, generation_date) == "NB2226100000000002000052SE"
+    assert builder.build_prefix(6, 3, generation_date) == "NB2226100000000002000063SE"
 
 
 def test_one_source_record_can_generate_several_logical_lines():
@@ -59,17 +59,17 @@ def test_one_source_record_can_generate_several_logical_lines():
     for line in physical_lines:
         assert len(line) == 225
 
-    assert physical_lines[0].startswith("NB222610000000252000011SE")
-    assert physical_lines[1].startswith("NB222610000000252000022SE")
-    assert physical_lines[2].startswith("NB222610000000252000033SE")
+    assert physical_lines[0].startswith("NB222610000000002000011SE")
+    assert physical_lines[1].startswith("NB222610000000002000022SE")
+    assert physical_lines[2].startswith("NB222610000000002000033SE")
 
-    assert physical_lines[3].startswith("NB222610000000252000041SE")
-    assert physical_lines[4].startswith("NB222610000000252000052SE")
-    assert physical_lines[5].startswith("NB222610000000252000063SE")
+    assert physical_lines[3].startswith("NB222610000000002000041SE")
+    assert physical_lines[4].startswith("NB222610000000002000052SE")
+    assert physical_lines[5].startswith("NB222610000000002000063SE")
 
-    assert physical_lines[6].startswith("NB222610000000252000071SE")
-    assert physical_lines[7].startswith("NB222610000000252000082SE")
-    assert physical_lines[8].startswith("NB222610000000252000093SE")
+    assert physical_lines[6].startswith("NB222610000000002000071SE")
+    assert physical_lines[7].startswith("NB222610000000002000082SE")
+    assert physical_lines[8].startswith("NB222610000000002000093SE")
 
 
 def test_generate_file(tmp_path: Path):

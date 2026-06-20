@@ -11,6 +11,15 @@ from .fields import RegisteredField
 from .prefix import SegmentPrefixBuilder
 from .solver import FixedWidthLineSolver
 from .master import SegmentedFlatFileMaster
+from .codegen import (
+    GenerationSpec,
+    LineField,
+    LineTypeSpec,
+    generate_code,
+    read_structure_csv,
+    safe_identifier,
+    write_generated_code,
+)
 
 __all__ = [
     "Condition",
@@ -20,4 +29,11 @@ __all__ = [
     "SegmentPrefixBuilder",
     "FixedWidthLineSolver",
     "SegmentedFlatFileMaster",
+    "GenerationSpec",
+    "LineField",
+    "LineTypeSpec",
+    "generate_code",
+    "read_structure_csv",
+    "safe_identifier",
+    "write_generated_code",
 ]
