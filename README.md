@@ -62,6 +62,12 @@ python -m build
 
 Les fichiers produits sont placés dans `dist`.
 
+## CI et releases
+
+La CI doit lancer les tests, construire le package, puis conserver les fichiers de build comme artefacts.
+
+La release doit publier les fichiers de build générés, en plus de l'archive du dépôt.
+
 ## Pas de dataclasses
 
 Le projet n'utilise pas `@dataclass`.
