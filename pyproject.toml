@@ -1,3 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parser-fichier-plat"
+version = "0.1.0"
+description = "Fixed-width segmented flat-file generator and CSV-driven code generator."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "TristanStark" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+fixed-width-codegen = "fixed_width_generator.codegen_cli:main"
+
+[tool.setuptools.packages.find]
+include = ["fixed_width_generator*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
